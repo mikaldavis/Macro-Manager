@@ -1,8 +1,7 @@
 import { GoogleGenAI, Type } from "@google/genai";
 import { Macros } from "../types";
 
-const apiKey = process.env.API_KEY || '';
-const ai = new GoogleGenAI({ apiKey });
+const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
 
 // Schema for structured output
 const macroSchema = {
@@ -61,28 +60,24 @@ export const analyzeFoodImage = async (base64Image: string, mimeType: string = '
       },
     };
 
-    // Note: responseSchema is not supported on gemini-2.5-flash-image currently,
-    // so we prompt for strict JSON and parse manually.
-    const prompt = `
-      Identify the food in this image. Estimate the portion size visible.
-      Return ONLY a raw JSON object (no markdown formatting) with the following keys:
-      foodName (string), calories (number), protein (number), fiber (number), carbs (number), fat (number), sugar (number).
-      Ensure values are for the entire visible portion.
-    `;
+    const prompt = `Identify the food in this image. Estimate the portion size visible. Provide nutritional information for the entire visible portion.`;
 
+    // Use gemini-3-flash-preview for multimodal tasks with JSON output
     const response = await ai.models.generateContent({
-      model: 'gemini-2.5-flash-image',
+      model: 'gemini-3-flash-preview',
       contents: {
         parts: [imagePart, { text: prompt }]
+      },
+      config: {
+        responseMimeType: "application/json",
+        responseSchema: macroSchema,
       }
     });
 
     const text = response.text;
     if (!text) return null;
 
-    // Clean up potential markdown code blocks if the model adds them despite instructions
-    const cleanJson = text.replace(/```json/g, '').replace(/```/g, '').trim();
-    const data = JSON.parse(cleanJson);
+    const data = JSON.parse(text);
 
     return {
       name: data.foodName,
