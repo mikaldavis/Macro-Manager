@@ -1,0 +1,7 @@
+{
+  "name": "Macro Manager",
+  "description": "A smart macro nutrient tracker using Gemini to analyze food from text and images, focusing on fiber, protein, and calories.",
+  "requestFramePermissions": [
+    "camera"
+  ]
+}
