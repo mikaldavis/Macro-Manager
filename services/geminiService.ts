@@ -1,13 +1,7 @@
 import { GoogleGenAI, Type } from "@google/genai";
 import { Macros } from "../types";
 
-// Ensure API key is present
-const apiKey = process.env.API_KEY;
-if (!apiKey) {
-  console.error("API Key is missing. Please check your .env file or deployment settings.");
-}
-
-const ai = new GoogleGenAI({ apiKey: apiKey || 'dummy-key-to-prevent-crash' });
+const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
 
 // Schema for structured output
 const macroSchema = {
@@ -38,7 +32,7 @@ const cleanJson = (text: string) => {
 };
 
 export const analyzeFoodText = async (description: string): Promise<{ name: string; macros: Macros }> => {
-  if (!apiKey) throw new Error("API Key is not configured.");
+  if (!process.env.API_KEY) throw new Error("API Key is not configured.");
 
   try {
     const response = await ai.models.generateContent({
@@ -74,7 +68,7 @@ export const analyzeFoodText = async (description: string): Promise<{ name: stri
 };
 
 export const analyzeFoodImage = async (base64Image: string, mimeType: string = 'image/jpeg'): Promise<{ name: string; macros: Macros }> => {
-  if (!apiKey) throw new Error("API Key is not configured.");
+  if (!process.env.API_KEY) throw new Error("API Key is not configured.");
 
   try {
     const imagePart = {

@@ -1,5 +1,5 @@
 import React, { useState, useRef } from 'react';
-import { Loader2, Sparkles, Check } from 'lucide-react';
+import { Loader2, Sparkles, Check, AlertCircle } from 'lucide-react';
 import { analyzeFoodText, analyzeFoodImage } from '../services/geminiService';
 import { FoodEntry, Macros } from '../types';
 
@@ -23,6 +23,16 @@ const AddFoodForm: React.FC<AddFoodFormProps> = ({ onAdd, onCancel, defaultFavor
   // File input ref
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  const handleError = (e: any) => {
+    let msg = e.message || "Could not identify food. Please try again or use manual entry.";
+    
+    // Provide helpful hint for the specific API key error
+    if (msg.includes("API Key") || msg.includes("403") || msg.includes("401")) {
+      msg = "API Key missing or invalid. Please add API_KEY to your .env file or deployment settings.";
+    }
+    setError(msg);
+  };
+
   const handleTextAnalysis = async () => {
     if (!inputText.trim()) return;
     setIsLoading(true);
@@ -31,7 +41,7 @@ const AddFoodForm: React.FC<AddFoodFormProps> = ({ onAdd, onCancel, defaultFavor
       const result = await analyzeFoodText(inputText);
       setPreviewResult(result);
     } catch (e: any) {
-      setError(e.message || "Could not identify food. Please try again or use manual entry.");
+      handleError(e);
     } finally {
       setIsLoading(false);
     }
@@ -52,7 +62,7 @@ const AddFoodForm: React.FC<AddFoodFormProps> = ({ onAdd, onCancel, defaultFavor
         const result = await analyzeFoodImage(base64String, file.type);
         setPreviewResult(result);
       } catch (err: any) {
-        setError(err.message || "Image analysis failed.");
+        handleError(err);
       } finally {
         setIsLoading(false);
       }
@@ -148,8 +158,8 @@ const AddFoodForm: React.FC<AddFoodFormProps> = ({ onAdd, onCancel, defaultFavor
           )}
           
           {error && (
-            <div className="text-red-600 text-sm text-center bg-red-50 p-2 rounded border border-red-100 flex flex-col gap-1">
-              <p className="font-semibold">Error</p>
+            <div className="text-red-700 text-sm bg-red-50 p-3 rounded-lg border border-red-200 flex items-start gap-2">
+              <AlertCircle size={18} className="shrink-0 mt-0.5" />
               <p>{error}</p>
             </div>
           )}
