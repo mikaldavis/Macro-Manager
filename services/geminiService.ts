@@ -1,7 +1,13 @@
 import { GoogleGenAI, Type } from "@google/genai";
 import { Macros } from "../types";
 
-const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+// Ensure API key is present
+const apiKey = process.env.API_KEY;
+if (!apiKey) {
+  console.error("API Key is missing. Please check your .env file or deployment settings.");
+}
+
+const ai = new GoogleGenAI({ apiKey: apiKey || 'dummy-key-to-prevent-crash' });
 
 // Schema for structured output
 const macroSchema = {
@@ -14,12 +20,26 @@ const macroSchema = {
     carbs: { type: Type.NUMBER, description: "Total carbohydrates in grams" },
     fat: { type: Type.NUMBER, description: "Total fat in grams" },
     sugar: { type: Type.NUMBER, description: "Total sugar in grams" },
-    confidence: { type: Type.NUMBER, description: "Confidence score 0-1" }
   },
   required: ["foodName", "calories", "protein", "fiber", "carbs", "fat"],
 };
 
-export const analyzeFoodText = async (description: string): Promise<{ name: string; macros: Macros } | null> => {
+// Helper to clean JSON string from Markdown code blocks
+const cleanJson = (text: string) => {
+  if (!text) return "";
+  let cleaned = text.trim();
+  // Remove markdown code blocks if present
+  if (cleaned.startsWith("```json")) {
+    cleaned = cleaned.replace(/^```json/, "").replace(/```$/, "");
+  } else if (cleaned.startsWith("```")) {
+    cleaned = cleaned.replace(/^```/, "").replace(/```$/, "");
+  }
+  return cleaned.trim();
+};
+
+export const analyzeFoodText = async (description: string): Promise<{ name: string; macros: Macros }> => {
+  if (!apiKey) throw new Error("API Key is not configured.");
+
   try {
     const response = await ai.models.generateContent({
       model: 'gemini-3-flash-preview',
@@ -31,9 +51,11 @@ export const analyzeFoodText = async (description: string): Promise<{ name: stri
     });
 
     const text = response.text;
-    if (!text) return null;
+    if (!text) throw new Error("No response from AI.");
 
-    const data = JSON.parse(text);
+    const cleanedText = cleanJson(text);
+    const data = JSON.parse(cleanedText);
+    
     return {
       name: data.foodName,
       macros: {
@@ -45,13 +67,15 @@ export const analyzeFoodText = async (description: string): Promise<{ name: stri
         sugar: data.sugar || 0,
       }
     };
-  } catch (error) {
+  } catch (error: any) {
     console.error("Gemini Text Analysis Error:", error);
-    return null;
+    throw new Error(error.message || "Failed to analyze food.");
   }
 };
 
-export const analyzeFoodImage = async (base64Image: string, mimeType: string = 'image/jpeg'): Promise<{ name: string; macros: Macros } | null> => {
+export const analyzeFoodImage = async (base64Image: string, mimeType: string = 'image/jpeg'): Promise<{ name: string; macros: Macros }> => {
+  if (!apiKey) throw new Error("API Key is not configured.");
+
   try {
     const imagePart = {
       inlineData: {
@@ -75,9 +99,10 @@ export const analyzeFoodImage = async (base64Image: string, mimeType: string = '
     });
 
     const text = response.text;
-    if (!text) return null;
+    if (!text) throw new Error("No response from AI.");
 
-    const data = JSON.parse(text);
+    const cleanedText = cleanJson(text);
+    const data = JSON.parse(cleanedText);
 
     return {
       name: data.foodName,
@@ -90,8 +115,8 @@ export const analyzeFoodImage = async (base64Image: string, mimeType: string = '
         sugar: data.sugar || 0,
       }
     };
-  } catch (error) {
+  } catch (error: any) {
     console.error("Gemini Image Analysis Error:", error);
-    return null;
+    throw new Error(error.message || "Failed to analyze image.");
   }
 };

@@ -1,5 +1,5 @@
 import React, { useState, useRef } from 'react';
-import { Camera, Loader2, Plus, Sparkles, Image as ImageIcon, Check } from 'lucide-react';
+import { Loader2, Sparkles, Check } from 'lucide-react';
 import { analyzeFoodText, analyzeFoodImage } from '../services/geminiService';
 import { FoodEntry, Macros } from '../types';
 
@@ -12,7 +12,7 @@ interface AddFoodFormProps {
 }
 
 const AddFoodForm: React.FC<AddFoodFormProps> = ({ onAdd, onCancel, defaultFavorite }) => {
-  const [mode, setMode] = useState<'text' | 'image' | 'manual'>('text');
+  const [mode, setMode] = useState<'text' | 'image'>('text');
   const [inputText, setInputText] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -29,13 +29,9 @@ const AddFoodForm: React.FC<AddFoodFormProps> = ({ onAdd, onCancel, defaultFavor
     setError(null);
     try {
       const result = await analyzeFoodText(inputText);
-      if (result) {
-        setPreviewResult(result);
-      } else {
-        setError("Could not identify food. Please try again or use manual entry.");
-      }
-    } catch (e) {
-      setError("Analysis failed. Check your connection.");
+      setPreviewResult(result);
+    } catch (e: any) {
+      setError(e.message || "Could not identify food. Please try again or use manual entry.");
     } finally {
       setIsLoading(false);
     }
@@ -54,13 +50,9 @@ const AddFoodForm: React.FC<AddFoodFormProps> = ({ onAdd, onCancel, defaultFavor
       try {
         const base64String = (reader.result as string).split(',')[1];
         const result = await analyzeFoodImage(base64String, file.type);
-        if (result) {
-          setPreviewResult(result);
-        } else {
-          setError("Could not identify food in image.");
-        }
-      } catch (err) {
-        setError("Image analysis failed.");
+        setPreviewResult(result);
+      } catch (err: any) {
+        setError(err.message || "Image analysis failed.");
       } finally {
         setIsLoading(false);
       }
@@ -155,7 +147,12 @@ const AddFoodForm: React.FC<AddFoodFormProps> = ({ onAdd, onCancel, defaultFavor
              </div>
           )}
           
-          {error && <p className="text-red-600 text-sm text-center bg-red-50 p-2 rounded border border-red-100">{error}</p>}
+          {error && (
+            <div className="text-red-600 text-sm text-center bg-red-50 p-2 rounded border border-red-100 flex flex-col gap-1">
+              <p className="font-semibold">Error</p>
+              <p>{error}</p>
+            </div>
+          )}
         </div>
       )}
 

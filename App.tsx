@@ -1,6 +1,6 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { LayoutDashboard, Utensils, Star, Plus, Trash2, Heart, PieChart, Settings2 } from 'lucide-react';
-import { DailyLog, FoodEntry, Tab, Macros, AVAILABLE_MACROS, MacroKey } from './types';
+import { DailyLog, FoodEntry, Tab, AVAILABLE_MACROS, MacroKey } from './types';
 import MacroChart from './components/MacroChart';
 import AddFoodForm from './components/AddFoodForm';
 
@@ -10,9 +10,13 @@ const App: React.FC = () => {
   const [entries, setEntries] = useState<FoodEntry[]>([]);
   const [favorites, setFavorites] = useState<FoodEntry[]>([]);
   const [isAddingFood, setIsAddingFood] = useState(false);
+  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   
   // Graph configuration
   const [visibleMacros, setVisibleMacros] = useState<MacroKey[]>(['calories', 'protein', 'fiber']);
+
+  // Settings Ref for click outside
+  const settingsRef = useRef<HTMLDivElement>(null);
 
   // Load from local storage on mount
   useEffect(() => {
@@ -30,6 +34,17 @@ const App: React.FC = () => {
   useEffect(() => {
     localStorage.setItem('favorites', JSON.stringify(favorites));
   }, [favorites]);
+
+  // Click outside listener for settings
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (settingsRef.current && !settingsRef.current.contains(event.target as Node)) {
+        setIsSettingsOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
 
   // Derived Data
   const dailyLogs: DailyLog[] = useMemo(() => {
@@ -116,24 +131,30 @@ const App: React.FC = () => {
         <h2 className="text-2xl font-bold text-slate-900">Your Progress</h2>
         <div className="flex items-center gap-2 bg-white p-1 rounded-lg border border-slate-200 shadow-sm">
            {/* Simple Macro Toggle */}
-           <div className="relative group">
-              <button className="p-2 hover:bg-slate-50 rounded-md text-slate-500 hover:text-primary transition-colors">
+           <div className="relative" ref={settingsRef}>
+              <button 
+                onClick={() => setIsSettingsOpen(!isSettingsOpen)}
+                className={`p-2 rounded-md transition-colors ${isSettingsOpen ? 'bg-slate-100 text-primary' : 'text-slate-500 hover:text-primary hover:bg-slate-50'}`}
+              >
                 <Settings2 size={20} />
               </button>
-              <div className="absolute right-0 top-full mt-2 w-48 bg-white border border-slate-200 rounded-xl shadow-xl p-3 z-50 hidden group-hover:block">
-                 <p className="text-xs font-bold text-slate-400 mb-2 uppercase">Graph Metrics (Max 4)</p>
-                 {AVAILABLE_MACROS.map(m => (
-                   <div key={m.key} className="flex items-center justify-between py-1 hover:bg-slate-50 rounded px-1">
-                     <span className="text-sm text-slate-700">{m.label}</span>
-                     <input 
-                       type="checkbox" 
-                       checked={visibleMacros.includes(m.key)}
-                       onChange={() => toggleGraphMacro(m.key)}
-                       className="accent-primary h-4 w-4"
-                     />
-                   </div>
-                 ))}
-              </div>
+              {isSettingsOpen && (
+                <div className="absolute right-0 top-full mt-2 w-48 bg-white border border-slate-200 rounded-xl shadow-xl p-3 z-50 animate-in fade-in zoom-in-95 duration-100">
+                   <p className="text-xs font-bold text-slate-400 mb-2 uppercase">Graph Metrics (Max 4)</p>
+                   {AVAILABLE_MACROS.map(m => (
+                     <div 
+                        key={m.key} 
+                        className="flex items-center justify-between py-2 px-2 hover:bg-slate-50 rounded cursor-pointer"
+                        onClick={() => toggleGraphMacro(m.key)}
+                     >
+                       <span className="text-sm text-slate-700">{m.label}</span>
+                       <div className={`w-4 h-4 rounded border flex items-center justify-center ${visibleMacros.includes(m.key) ? 'bg-primary border-primary' : 'border-slate-300 bg-white'}`}>
+                          {visibleMacros.includes(m.key) && <div className="w-2 h-2 bg-white rounded-sm" />}
+                       </div>
+                     </div>
+                   ))}
+                </div>
+              )}
            </div>
         </div>
       </div>
