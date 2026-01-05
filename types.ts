@@ -15,10 +15,20 @@ export interface FoodEntry extends Macros {
   isFavorite?: boolean;
 }
 
+export interface ActivityEntry {
+  id: string;
+  name: string;
+  caloriesBurned: number;
+  timestamp: number;
+  date: string;
+}
+
 export interface DailyLog {
   date: string;
   totals: Macros;
+  caloriesBurned: number;
   entries: FoodEntry[];
+  activities: ActivityEntry[];
 }
 
 export enum Tab {
