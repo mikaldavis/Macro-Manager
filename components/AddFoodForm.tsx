@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { Loader2, Sparkles, Check, AlertCircle } from 'lucide-react';
 import { analyzeFoodText, analyzeFoodImage } from '../services/geminiService';
 import { FoodEntry, Macros } from '../types';
@@ -6,18 +6,26 @@ import { FoodEntry, Macros } from '../types';
 const generateId = () => Math.random().toString(36).substring(2, 9);
 
 interface AddFoodFormProps {
-  onAdd: (entry: FoodEntry) => void;
+  onSave: (entry: FoodEntry) => void;
   onCancel: () => void;
-  defaultFavorite?: FoodEntry; // If adding from favorites
+  initialData?: FoodEntry | null; // For editing
+  initialValues?: FoodEntry | null; // For favorites (new entry with preset values)
+  selectedDate?: string;
 }
 
-const AddFoodForm: React.FC<AddFoodFormProps> = ({ onAdd, onCancel, defaultFavorite }) => {
+const AddFoodForm: React.FC<AddFoodFormProps> = ({ onSave, onCancel, initialData, initialValues, selectedDate }) => {
   const [mode, setMode] = useState<'text' | 'image'>('text');
   const [inputText, setInputText] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  
+  // Initialize state based on editing or adding
   const [previewResult, setPreviewResult] = useState<{ name: string; macros: Macros } | null>(
-    defaultFavorite ? { name: defaultFavorite.name, macros: defaultFavorite } : null
+    initialData 
+      ? { name: initialData.name, macros: initialData } 
+      : initialValues 
+        ? { name: initialValues.name, macros: initialValues }
+        : null
   );
   
   // File input ref
@@ -25,8 +33,6 @@ const AddFoodForm: React.FC<AddFoodFormProps> = ({ onAdd, onCancel, defaultFavor
 
   const handleError = (e: any) => {
     let msg = e.message || "Could not identify food. Please try again or use manual entry.";
-    
-    // Provide helpful hint for the specific API key error
     if (msg.includes("API Key") || msg.includes("403") || msg.includes("401")) {
       msg = "API Key missing or invalid. Please add API_KEY to your .env file or deployment settings.";
     }
@@ -72,15 +78,26 @@ const AddFoodForm: React.FC<AddFoodFormProps> = ({ onAdd, onCancel, defaultFavor
 
   const handleSave = () => {
     if (!previewResult) return;
+    
+    // Use local time for date generation if not provided
+    const getLocalYMD = () => {
+      const d = new Date();
+      const year = d.getFullYear();
+      const month = String(d.getMonth() + 1).padStart(2, '0');
+      const day = String(d.getDate()).padStart(2, '0');
+      return `${year}-${month}-${day}`;
+    };
+
     const newEntry: FoodEntry = {
-      id: generateId(),
+      id: initialData?.id || generateId(), // Keep ID if editing
       name: previewResult.name,
       ...previewResult.macros,
-      date: new Date().toISOString().split('T')[0],
-      timestamp: Date.now(),
-      isFavorite: false
+      // If editing, keep original date. If new, use selectedDate or today (local).
+      date: initialData?.date || selectedDate || getLocalYMD(),
+      timestamp: initialData?.timestamp || Date.now(),
+      isFavorite: initialData?.isFavorite || false
     };
-    onAdd(newEntry);
+    onSave(newEntry);
   };
 
   // Manual override of values
@@ -99,7 +116,7 @@ const AddFoodForm: React.FC<AddFoodFormProps> = ({ onAdd, onCancel, defaultFavor
   return (
     <div className="bg-white rounded-xl p-4 shadow-lg border border-slate-200 animate-in fade-in zoom-in duration-200">
       <div className="flex justify-between items-center mb-4">
-        <h3 className="text-lg font-semibold text-slate-900">Log Food</h3>
+        <h3 className="text-lg font-semibold text-slate-900">{initialData ? 'Edit Food' : 'Log Food'}</h3>
         <button onClick={onCancel} className="text-slate-500 hover:text-slate-800">Cancel</button>
       </div>
 
@@ -204,7 +221,7 @@ const AddFoodForm: React.FC<AddFoodFormProps> = ({ onAdd, onCancel, defaultFavor
               onClick={handleSave}
               className="flex-1 py-3 rounded-lg font-bold text-white bg-primary hover:bg-emerald-700 transition-colors shadow-lg shadow-primary/20"
             >
-              Add Entry
+              {initialData ? 'Save Changes' : 'Add Entry'}
             </button>
           </div>
         </div>

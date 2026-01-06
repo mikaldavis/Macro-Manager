@@ -5,25 +5,36 @@ import { ActivityEntry } from '../types';
 const generateId = () => Math.random().toString(36).substring(2, 9);
 
 interface AddActivityFormProps {
-  onAdd: (entry: ActivityEntry) => void;
+  onSave: (entry: ActivityEntry) => void;
   onCancel: () => void;
+  initialData?: ActivityEntry | null;
+  selectedDate?: string;
 }
 
-const AddActivityForm: React.FC<AddActivityFormProps> = ({ onAdd, onCancel }) => {
-  const [name, setName] = useState('');
-  const [calories, setCalories] = useState('');
+const AddActivityForm: React.FC<AddActivityFormProps> = ({ onSave, onCancel, initialData, selectedDate }) => {
+  const [name, setName] = useState(initialData?.name || '');
+  const [calories, setCalories] = useState(initialData?.caloriesBurned?.toString() || '');
 
   const handleSave = () => {
     if (!name || !calories) return;
     
+    // Use local time for date generation
+    const getLocalYMD = () => {
+      const d = new Date();
+      const year = d.getFullYear();
+      const month = String(d.getMonth() + 1).padStart(2, '0');
+      const day = String(d.getDate()).padStart(2, '0');
+      return `${year}-${month}-${day}`;
+    };
+
     const newEntry: ActivityEntry = {
-      id: generateId(),
+      id: initialData?.id || generateId(),
       name: name,
       caloriesBurned: Math.max(0, parseInt(calories, 10)),
-      date: new Date().toISOString().split('T')[0],
-      timestamp: Date.now()
+      date: initialData?.date || selectedDate || getLocalYMD(),
+      timestamp: initialData?.timestamp || Date.now()
     };
-    onAdd(newEntry);
+    onSave(newEntry);
   };
 
   return (
@@ -31,7 +42,7 @@ const AddActivityForm: React.FC<AddActivityFormProps> = ({ onAdd, onCancel }) =>
       <div className="flex justify-between items-center mb-4">
         <h3 className="text-lg font-semibold text-slate-900 flex items-center gap-2">
           <Flame className="text-orange-500" size={20} />
-          Log Activity
+          {initialData ? 'Edit Activity' : 'Log Activity'}
         </h3>
         <button onClick={onCancel} className="text-slate-500 hover:text-slate-800">Cancel</button>
       </div>
@@ -72,7 +83,7 @@ const AddActivityForm: React.FC<AddActivityFormProps> = ({ onAdd, onCancel }) =>
           className="w-full bg-orange-500 text-white py-3 rounded-lg font-bold flex items-center justify-center gap-2 hover:bg-orange-600 disabled:opacity-50 shadow-md shadow-orange-500/20 transition-colors"
         >
           <Check size={18} />
-          Add Activity
+          {initialData ? 'Save Changes' : 'Add Activity'}
         </button>
       </div>
     </div>

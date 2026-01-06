@@ -1,9 +1,17 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
-import { LayoutDashboard, Utensils, Star, Plus, Trash2, Heart, PieChart, Settings2, Flame, Activity } from 'lucide-react';
+import { LayoutDashboard, Utensils, Star, Plus, Trash2, Heart, PieChart, Settings2, Flame, Activity, ChevronLeft, ChevronRight, Pencil } from 'lucide-react';
 import { DailyLog, FoodEntry, ActivityEntry, Tab, AVAILABLE_MACROS, MacroKey } from './types';
 import MacroChart from './components/MacroChart';
 import AddFoodForm from './components/AddFoodForm';
 import AddActivityForm from './components/AddActivityForm';
+
+// Helper to get local date string YYYY-MM-DD
+const getLocalYMD = (d: Date = new Date()) => {
+  const year = d.getFullYear();
+  const month = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+};
 
 const App: React.FC = () => {
   // State
@@ -11,8 +19,16 @@ const App: React.FC = () => {
   const [entries, setEntries] = useState<FoodEntry[]>([]);
   const [activities, setActivities] = useState<ActivityEntry[]>([]);
   const [favorites, setFavorites] = useState<FoodEntry[]>([]);
+  
+  // UI State for Forms
   const [isAddingFood, setIsAddingFood] = useState(false);
   const [isAddingActivity, setIsAddingActivity] = useState(false);
+  const [editingFood, setEditingFood] = useState<FoodEntry | null>(null);
+  const [editingActivity, setEditingActivity] = useState<ActivityEntry | null>(null);
+  const [favoriteToAdding, setFavoriteToAdding] = useState<FoodEntry | null>(null);
+
+  // View State
+  const [viewDate, setViewDate] = useState<string>(getLocalYMD());
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   
   // Graph configuration
@@ -95,10 +111,12 @@ const App: React.FC = () => {
     return Object.values(logs).sort((a, b) => a.date.localeCompare(b.date));
   }, [entries, activities]);
 
-  // Today's Data
-  const todayDate = new Date().toISOString().split('T')[0];
-  const todayLog = dailyLogs.find(log => log.date === todayDate) || {
-    date: todayDate,
+  // Today's Data (using local time)
+  const todayDateStr = getLocalYMD();
+  
+  // Data for the currently viewed date in Log tab
+  const viewedLog = dailyLogs.find(log => log.date === viewDate) || {
+    date: viewDate,
     entries: [],
     activities: [],
     caloriesBurned: 0,
@@ -106,15 +124,27 @@ const App: React.FC = () => {
   };
 
   // Handlers
-  const addEntry = (entry: FoodEntry) => {
-    setEntries([...entries, entry]);
-    setIsAddingFood(false);
+  const handleSaveFood = (entry: FoodEntry) => {
+    // Check if updating or new
+    if (editingFood) {
+      setEntries(entries.map(e => e.id === entry.id ? entry : e));
+      setEditingFood(null);
+    } else {
+      setEntries([...entries, entry]);
+      setIsAddingFood(false);
+      setFavoriteToAdding(null);
+    }
     setActiveTab(Tab.LOG); 
   };
 
-  const addActivity = (entry: ActivityEntry) => {
-    setActivities([...activities, entry]);
-    setIsAddingActivity(false);
+  const handleSaveActivity = (entry: ActivityEntry) => {
+    if (editingActivity) {
+      setActivities(activities.map(a => a.id === entry.id ? entry : a));
+      setEditingActivity(null);
+    } else {
+      setActivities([...activities, entry]);
+      setIsAddingActivity(false);
+    }
     setActiveTab(Tab.LOG);
   };
 
@@ -131,6 +161,7 @@ const App: React.FC = () => {
     if (exists) {
       setFavorites(favorites.filter(f => f.name !== entry.name));
     } else {
+      // Create a clean favorite entry
       setFavorites([...favorites, { ...entry, id: 'fav-' + Date.now(), isFavorite: true }]);
     }
   };
@@ -147,14 +178,16 @@ const App: React.FC = () => {
     }
   };
 
-  const addFromFavorite = (fav: FoodEntry) => {
-    const newEntry = {
-      ...fav,
-      id: Math.random().toString(36).substring(2, 9),
-      date: todayDate,
-      timestamp: Date.now()
-    };
-    addEntry(newEntry);
+  const startAddFromFavorite = (fav: FoodEntry) => {
+    setFavoriteToAdding(fav);
+    setIsAddingFood(true);
+    setActiveTab(Tab.LOG);
+  };
+
+  const changeViewDate = (days: number) => {
+    const d = new Date(viewDate + "T12:00:00"); // Safety: set to noon to avoid timezone shift on just date parsing
+    d.setDate(d.getDate() + days);
+    setViewDate(getLocalYMD(d));
   };
 
   // --- Render Helpers ---
@@ -197,87 +230,167 @@ const App: React.FC = () => {
         <MacroChart data={dailyLogs} activeMacros={visibleMacros} />
       </div>
 
-      {/* Net Calories & Burned */}
-      <div className="grid grid-cols-2 gap-4">
-        <div className="bg-orange-50 p-4 rounded-xl border border-orange-100 shadow-sm">
-           <div className="flex items-center gap-2 text-orange-600 mb-1">
-             <Flame size={18} />
-             <span className="text-sm font-bold uppercase">Burned</span>
-           </div>
-           <p className="text-3xl font-bold text-slate-900">{todayLog.caloriesBurned}</p>
-        </div>
-        <div className="bg-blue-50 p-4 rounded-xl border border-blue-100 shadow-sm">
-           <div className="flex items-center gap-2 text-blue-600 mb-1">
-             <Activity size={18} />
-             <span className="text-sm font-bold uppercase">Net Calories</span>
-           </div>
-           <p className="text-3xl font-bold text-slate-900">{todayLog.totals.calories - todayLog.caloriesBurned}</p>
-        </div>
+      {/* Today's Summary (Using current date, not viewed date) */}
+      <div className="flex items-center justify-between">
+         <h3 className="text-sm font-bold text-slate-400 uppercase tracking-wide">Today's Summary</h3>
+         <span className="text-xs text-slate-400">{todayDateStr}</span>
       </div>
-
-      {/* Macro Summary Cards */}
-      <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-        {visibleMacros.map(key => {
-          const config = AVAILABLE_MACROS.find(m => m.key === key);
-          const value = todayLog.totals[key];
-          return (
-            <div key={key} className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm hover:shadow-md transition-shadow">
-              <p className="text-sm text-slate-500 font-medium">{config?.label}</p>
-              <p className="text-2xl font-bold mt-1" style={{ color: config?.color }}>
-                {Math.round(value)}
-              </p>
+      
+      {(() => {
+        // We calculate Today's summary specifically for the dashboard, regardless of log view
+        const todayLog = dailyLogs.find(l => l.date === todayDateStr) || { totals: {calories:0, protein:0, fiber:0, carbs:0, fat:0}, caloriesBurned: 0 };
+        return (
+          <>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="bg-orange-50 p-4 rounded-xl border border-orange-100 shadow-sm">
+                <div className="flex items-center gap-2 text-orange-600 mb-1">
+                  <Flame size={18} />
+                  <span className="text-sm font-bold uppercase">Burned</span>
+                </div>
+                <p className="text-3xl font-bold text-slate-900">{todayLog.caloriesBurned}</p>
+              </div>
+              <div className="bg-blue-50 p-4 rounded-xl border border-blue-100 shadow-sm">
+                <div className="flex items-center gap-2 text-blue-600 mb-1">
+                  <Activity size={18} />
+                  <span className="text-sm font-bold uppercase">Net Calories</span>
+                </div>
+                <p className="text-3xl font-bold text-slate-900">{todayLog.totals.calories - todayLog.caloriesBurned}</p>
+              </div>
             </div>
-          );
-        })}
-      </div>
+
+            <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+              {visibleMacros.map(key => {
+                const config = AVAILABLE_MACROS.find(m => m.key === key);
+                const value = todayLog.totals[key];
+                return (
+                  <div key={key} className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm hover:shadow-md transition-shadow">
+                    <p className="text-sm text-slate-500 font-medium">{config?.label}</p>
+                    <p className="text-2xl font-bold mt-1" style={{ color: config?.color }}>
+                      {Math.round(value)}
+                    </p>
+                  </div>
+                );
+              })}
+            </div>
+          </>
+        );
+      })()}
     </div>
   );
 
   const renderLog = () => (
     <div className="space-y-4 animate-in slide-in-from-bottom-2 duration-300 pb-20">
-      <div className="flex justify-between items-center sticky top-0 bg-white/95 backdrop-blur z-10 py-4 border-b border-slate-200">
-        <div>
-          <h2 className="text-2xl font-bold text-slate-900">Today's Log</h2>
-          <p className="text-sm text-slate-500">{new Date().toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric' })}</p>
+      <div className="sticky top-0 bg-slate-50/95 backdrop-blur z-20 pt-4 pb-2 border-b border-slate-200 shadow-sm">
+        <div className="flex justify-between items-center mb-4 px-1">
+          <h2 className="text-2xl font-bold text-slate-900">Daily Log</h2>
+          <div className="flex gap-2">
+            <button 
+              onClick={() => setIsAddingActivity(true)}
+              className="bg-orange-500 hover:bg-orange-600 text-white p-2.5 rounded-full shadow-lg shadow-orange-500/20 transition-all hover:scale-105 active:scale-95"
+              title="Log Activity"
+            >
+              <Flame size={20} />
+            </button>
+            <button 
+              onClick={() => setIsAddingFood(true)}
+              className="bg-primary hover:bg-emerald-700 text-white p-2.5 rounded-full shadow-lg shadow-emerald-500/20 transition-all hover:scale-105 active:scale-95"
+              title="Log Food"
+            >
+              <Plus size={20} />
+            </button>
+          </div>
         </div>
-        <div className="flex gap-2">
-          <button 
-            onClick={() => setIsAddingActivity(true)}
-            className="bg-orange-500 hover:bg-orange-600 text-white p-3 rounded-full shadow-lg shadow-orange-500/20 transition-all hover:scale-105 active:scale-95"
-            title="Log Activity"
-          >
-            <Flame size={24} />
+
+        {/* Horizontal Date Strip */}
+        <div className="flex items-center justify-between bg-white/50 p-1 rounded-2xl mb-1 select-none">
+          <button onClick={() => changeViewDate(-1)} className="p-2 text-slate-400 hover:text-slate-900 hover:bg-slate-100 rounded-xl transition-colors">
+            <ChevronLeft size={24} />
           </button>
-          <button 
-            onClick={() => setIsAddingFood(true)}
-            className="bg-primary hover:bg-emerald-700 text-white p-3 rounded-full shadow-lg shadow-emerald-500/20 transition-all hover:scale-105 active:scale-95"
-            title="Log Food"
-          >
-            <Plus size={24} />
+          
+          <div className="flex-1 flex justify-around px-1 gap-1">
+            {(() => {
+                // Generate window of 5 days
+                const dates = [];
+                const center = new Date(viewDate + "T12:00:00");
+                for (let i = -2; i <= 2; i++) {
+                    const d = new Date(center);
+                    d.setDate(center.getDate() + i);
+                    dates.push(getLocalYMD(d));
+                }
+                
+                return dates.map(dateStr => {
+                    const dateObj = new Date(dateStr + "T12:00:00");
+                    const isSelected = dateStr === viewDate;
+                    const isToday = dateStr === todayDateStr;
+                    const dayName = dateObj.toLocaleDateString('en-US', { weekday: 'short' });
+                    const dayNum = dateObj.getDate();
+                    
+                    return (
+                      <button 
+                        key={dateStr}
+                        onClick={() => setViewDate(dateStr)}
+                        className={`flex flex-col items-center justify-center w-11 h-14 rounded-xl transition-all duration-200 relative ${
+                          isSelected 
+                            ? 'bg-primary text-white shadow-lg shadow-emerald-500/20 scale-110 z-10' 
+                            : 'text-slate-400 hover:bg-white hover:shadow-sm'
+                        }`}
+                      >
+                        <span className="text-[9px] font-bold uppercase tracking-wider opacity-90">{dayName}</span>
+                        <span className="text-lg font-bold leading-none mt-0.5">{dayNum}</span>
+                        {isToday && !isSelected && (
+                            <div className="absolute bottom-1.5 w-1 h-1 rounded-full bg-primary" />
+                        )}
+                      </button>
+                    )
+                });
+            })()}
+          </div>
+
+          <button onClick={() => changeViewDate(1)} className="p-2 text-slate-400 hover:text-slate-900 hover:bg-slate-100 rounded-xl transition-colors">
+            <ChevronRight size={24} />
           </button>
         </div>
       </div>
 
       {isAddingFood && (
         <AddFoodForm 
-          onAdd={addEntry} 
-          onCancel={() => setIsAddingFood(false)} 
+          onSave={handleSaveFood} 
+          onCancel={() => { setIsAddingFood(false); setFavoriteToAdding(null); }}
+          initialValues={favoriteToAdding}
+          selectedDate={viewDate}
+        />
+      )}
+      
+      {editingFood && (
+        <AddFoodForm 
+          onSave={handleSaveFood}
+          onCancel={() => setEditingFood(null)}
+          initialData={editingFood}
         />
       )}
 
       {isAddingActivity && (
         <AddActivityForm 
-          onAdd={addActivity}
+          onSave={handleSaveActivity}
           onCancel={() => setIsAddingActivity(false)}
+          selectedDate={viewDate}
+        />
+      )}
+
+      {editingActivity && (
+        <AddActivityForm 
+          onSave={handleSaveActivity}
+          onCancel={() => setEditingActivity(null)}
+          initialData={editingActivity}
         />
       )}
 
       {/* Activity List */}
-      {todayLog.activities.length > 0 && (
+      {viewedLog.activities.length > 0 && (
          <div className="space-y-2 mb-6">
            <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider ml-1">Activities</h3>
-           {todayLog.activities.slice().reverse().map(act => (
-             <div key={act.id} className="bg-orange-50/50 p-4 rounded-xl border border-orange-100 flex justify-between items-center">
+           {viewedLog.activities.slice().reverse().map(act => (
+             <div key={act.id} className="bg-orange-50/50 p-4 rounded-xl border border-orange-100 flex justify-between items-center group">
                <div className="flex items-center gap-3">
                  <div className="bg-orange-100 p-2 rounded-lg text-orange-500">
                    <Activity size={18} />
@@ -287,11 +400,17 @@ const App: React.FC = () => {
                     <p className="text-xs text-slate-500">{new Date(act.timestamp).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</p>
                  </div>
                </div>
-               <div className="flex items-center gap-3">
-                  <span className="font-bold text-orange-600">-{act.caloriesBurned} kcal</span>
+               <div className="flex items-center gap-2">
+                  <span className="font-bold text-orange-600 mr-2">-{act.caloriesBurned} kcal</span>
+                  <button 
+                   onClick={() => setEditingActivity(act)}
+                   className="p-2 rounded-full hover:bg-blue-50 text-slate-400 hover:text-blue-500 transition-colors opacity-0 group-hover:opacity-100"
+                 >
+                   <Pencil size={16} />
+                 </button>
                   <button 
                    onClick={() => deleteActivity(act.id)}
-                   className="p-2 rounded-full hover:bg-red-50 text-slate-400 hover:text-red-500 transition-colors"
+                   className="p-2 rounded-full hover:bg-red-50 text-slate-400 hover:text-red-500 transition-colors opacity-0 group-hover:opacity-100"
                  >
                    <Trash2 size={16} />
                  </button>
@@ -303,11 +422,11 @@ const App: React.FC = () => {
 
       {/* Food List */}
       <div className="space-y-3">
-         {todayLog.entries.length > 0 && <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider ml-1">Meals</h3>}
-         {todayLog.entries.length === 0 && todayLog.activities.length === 0 && !isAddingFood && !isAddingActivity ? (
+         {viewedLog.entries.length > 0 && <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider ml-1">Meals</h3>}
+         {viewedLog.entries.length === 0 && viewedLog.activities.length === 0 && !isAddingFood && !isAddingActivity && !editingFood && !editingActivity ? (
             <div className="text-center py-12 text-slate-400">
                 <Utensils size={48} className="mx-auto mb-4 opacity-50 text-slate-300" />
-                <p>No activity logged today.</p>
+                <p>No activity logged for {viewDate === todayDateStr ? "today" : new Date(viewDate + "T12:00:00").toLocaleDateString(undefined, { weekday: 'long' })}.</p>
                 <div className="flex justify-center gap-4 mt-2">
                   <button onClick={() => setIsAddingFood(true)} className="text-primary font-medium hover:underline">Log Food</button>
                   <span className="text-slate-300">|</span>
@@ -315,7 +434,7 @@ const App: React.FC = () => {
                 </div>
             </div>
           ) : (
-            todayLog.entries.slice().reverse().map(entry => (
+            viewedLog.entries.slice().reverse().map(entry => (
               <div key={entry.id} className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex justify-between items-center group hover:border-primary/30 transition-colors">
                 <div>
                   <h4 className="font-semibold text-slate-900 text-lg">{entry.name}</h4>
@@ -325,12 +444,18 @@ const App: React.FC = () => {
                     <span className="font-medium" style={{ color: '#2563eb' }}>{entry.fiber}g Fib</span>
                   </div>
                 </div>
-                <div className="flex gap-2 opacity-100 sm:opacity-0 group-hover:opacity-100 transition-opacity">
+                <div className="flex gap-1 opacity-100 sm:opacity-0 group-hover:opacity-100 transition-opacity">
                    <button 
                     onClick={() => toggleFavorite(entry)}
                     className={`p-2 rounded-full hover:bg-slate-100 transition-colors ${favorites.some(f => f.name === entry.name) ? 'text-yellow-400' : 'text-slate-400'}`}
                   >
                      <Star size={18} fill={favorites.some(f => f.name === entry.name) ? "currentColor" : "none"} />
+                   </button>
+                   <button 
+                     onClick={() => setEditingFood(entry)}
+                     className="p-2 rounded-full hover:bg-blue-50 text-slate-400 hover:text-blue-500 transition-colors"
+                   >
+                     <Pencil size={18} />
                    </button>
                    <button 
                      onClick={() => deleteEntry(entry.id)}
@@ -357,7 +482,7 @@ const App: React.FC = () => {
       ) : (
         <div className="grid gap-3">
            {favorites.map(fav => (
-             <div key={fav.id} className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex justify-between items-center hover:border-primary transition-colors cursor-pointer group" onClick={() => addFromFavorite(fav)}>
+             <div key={fav.id} className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex justify-between items-center hover:border-primary transition-colors cursor-pointer group" onClick={() => startAddFromFavorite(fav)}>
                <div>
                   <h4 className="font-semibold text-slate-900 group-hover:text-primary transition-colors">{fav.name}</h4>
                   <p className="text-xs text-slate-500">{fav.calories} kcal • {fav.protein}g P • {fav.fiber}g F</p>
